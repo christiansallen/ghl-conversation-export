@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversation Export</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fb;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    .header p {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    /* States */
+    .state { display: none; }
+    .state.active { display: block; }
+
+    /* Loading */
+    #state-loading {
+      text-align: center;
+      padding-top: 80px;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #state-loading p {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    /* Error */
+    #state-error {
+      text-align: center;
+      padding-top: 80px;
+    }
+    .error-icon {
+      width: 48px;
+      height: 48px;
+      background: #fef2f2;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .error-icon svg { width: 24px; height: 24px; color: #ef4444; }
+    #state-error h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    #state-error p { font-size: 14px; color: #6b7280; }
+
+    /* Search */
+    .search-wrapper {
+      position: relative;
+    }
+    .search-input {
+      width: 100%;
+      padding: 12px 16px 12px 40px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+    .search-input:focus {
+      border-color: #2563eb;
+    }
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      pointer-events: none;
+    }
+    .search-icon svg { width: 18px; height: 18px; }
+
+    /* Dropdown */
+    .dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      z-index: 10;
+      max-height: 320px;
+      overflow-y: auto;
+      display: none;
+    }
+    .dropdown.open { display: block; }
+    .dropdown-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+      transition: background 0.1s;
+    }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: #f9fafb; }
+    .dropdown-item .name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .dropdown-item .detail {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .dropdown-empty {
+      padding: 24px 16px;
+      text-align: center;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    .dropdown-searching {
+      padding: 24px 16px;
+      text-align: center;
+    }
+
+    /* Selected contact */
+    .selected-contact {
+      margin-top: 20px;
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: none;
+    }
+    .selected-contact.visible { display: flex; align-items: center; gap: 14px; }
+    .contact-avatar {
+      width: 44px;
+      height: 44px;
+      background: #eff6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: #2563eb;
+    }
+    .contact-info { flex: 1; min-width: 0; }
+    .contact-info .name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .contact-info .detail {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .btn-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      padding: 4px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+    .btn-remove:hover { color: #ef4444; }
+    .btn-remove svg { width: 18px; height: 18px; }
+
+    /* Export button */
+    .export-btn {
+      margin-top: 20px;
+      width: 100%;
+      padding: 14px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: none;
+      transition: background 0.15s;
+    }
+    .export-btn.visible { display: block; }
+    .export-btn:hover { background: #1d4ed8; }
+    .export-btn:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+
+    /* Progress */
+    .progress-section {
+      margin-top: 24px;
+      display: none;
+    }
+    .progress-section.visible { display: block; }
+    .progress-label {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #2563eb;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .progress-bar.indeterminate {
+      width: 40%;
+      animation: progress-slide 1.2s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    /* Download */
+    .download-section {
+      margin-top: 24px;
+      text-align: center;
+      display: none;
+    }
+    .download-section.visible { display: block; }
+    .download-icon {
+      width: 56px;
+      height: 56px;
+      background: #ecfdf5;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .download-icon svg { width: 28px; height: 28px; color: #16a34a; }
+    .download-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .download-section p {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: #111827;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .download-btn:hover { background: #374151; }
+    .download-btn svg { width: 16px; height: 16px; }
+
+    .new-export-btn {
+      margin-top: 12px;
+      background: none;
+      border: none;
+      color: #2563eb;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 8px 16px;
+    }
+    .new-export-btn:hover { text-decoration: underline; }
+
+    /* Error toast */
+    .error-toast {
+      margin-top: 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .error-toast.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Loading state (SSO handshake) -->
+    <div id="state-loading" class="state active">
+      <div class="spinner"></div>
+      <p>Connecting to your account...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="state-error" class="state">
+      <div class="error-icon">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+      </div>
+      <h2>Connection Error</h2>
+      <p id="error-message">Unable to connect. Please reload the page.</p>
+    </div>
+
+    <!-- Main app state -->
+    <div id="state-app" class="state">
+      <div class="header">
+        <h1>Conversation Export</h1>
+        <p>Search for a contact and export their full conversation history as a PDF.</p>
+      </div>
+
+      <!-- Search -->
+      <div class="search-wrapper">
+        <div class="search-icon">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        </div>
+        <input type="text" id="search-input" class="search-input" placeholder="Search by name, email, or phone...">
+        <div id="dropdown" class="dropdown"></div>
+      </div>
+
+      <!-- Selected contact -->
+      <div id="selected-contact" class="selected-contact">
+        <div id="contact-avatar" class="contact-avatar"></div>
+        <div class="contact-info">
+          <div id="contact-name" class="name"></div>
+          <div id="contact-detail" class="detail"></div>
+        </div>
+        <button id="btn-remove" class="btn-remove" title="Remove">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Export button -->
+      <button id="export-btn" class="export-btn">Export as PDF</button>
+
+      <!-- Progress -->
+      <div id="progress-section" class="progress-section">
+        <div id="progress-label" class="progress-label">Starting export...</div>
+        <div class="progress-bar-bg">
+          <div id="progress-bar" class="progress-bar indeterminate"></div>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <div id="download-section" class="download-section">
+        <div class="download-icon">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3>Export Complete</h3>
+        <p id="download-info">Your PDF is ready.</p>
+        <button id="download-btn" class="download-btn">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+          Download PDF
+        </button>
+        <br>
+        <button id="new-export-btn" class="new-export-btn">Export another contact</button>
+      </div>
+
+      <!-- Error toast -->
+      <div id="error-toast" class="error-toast"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- State ---
+    let locationId = null;
+    let selectedContact = null;
+    let currentJobId = null;
+    let pollTimer = null;
+    let debounceTimer = null;
+
+    // --- Elements ---
+    const stateLoading = document.getElementById('state-loading');
+    const stateError = document.getElementById('state-error');
+    const stateApp = document.getElementById('state-app');
+    const errorMessage = document.getElementById('error-message');
+    const searchInput = document.getElementById('search-input');
+    const dropdown = document.getElementById('dropdown');
+    const selectedContactEl = document.getElementById('selected-contact');
+    const contactAvatar = document.getElementById('contact-avatar');
+    const contactName = document.getElementById('contact-name');
+    const contactDetail = document.getElementById('contact-detail');
+    const btnRemove = document.getElementById('btn-remove');
+    const exportBtn = document.getElementById('export-btn');
+    const progressSection = document.getElementById('progress-section');
+    const progressLabel = document.getElementById('progress-label');
+    const progressBar = document.getElementById('progress-bar');
+    const downloadSection = document.getElementById('download-section');
+    const downloadInfo = document.getElementById('download-info');
+    const downloadBtn = document.getElementById('download-btn');
+    const newExportBtn = document.getElementById('new-export-btn');
+    const errorToast = document.getElementById('error-toast');
+
+    // --- SSO Init ---
+    function initSSO() {
+      window.addEventListener('message', handleSSOMessage);
+      // Request user data from GHL parent frame
+      window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*');
+
+      // Timeout after 10s
+      setTimeout(() => {
+        if (!locationId) {
+          showState('error');
+          errorMessage.textContent = 'SSO handshake timed out. Make sure you are accessing this app from within GoHighLevel.';
+        }
+      }, 10000);
+    }
+
+    function handleSSOMessage(event) {
+      if (!event.data || !event.data.message) return;
+
+      if (event.data.message === 'USER_DATA') {
+        const ssoKey = event.data.payload;
+        decryptSSO(ssoKey);
+      }
+    }
+
+    async function decryptSSO(key) {
+      try {
+        const res = await fetch('/sso', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+
+        if (!res.ok) throw new Error('SSO decryption failed');
+
+        const data = await res.json();
+        locationId = data.activeLocation || data.locationId || data.location?.id;
+
+        if (!locationId) throw new Error('No location found in SSO data');
+
+        showState('app');
+        searchInput.focus();
+      } catch (err) {
+        console.error('SSO error:', err);
+        showState('error');
+        errorMessage.textContent = 'Failed to authenticate. Please reload the page.';
+      }
+    }
+
+    // --- UI helpers ---
+    function showState(name) {
+      stateLoading.classList.remove('active');
+      stateError.classList.remove('active');
+      stateApp.classList.remove('active');
+      document.getElementById('state-' + name).classList.add('active');
+    }
+
+    function showError(msg) {
+      errorToast.textContent = msg;
+      errorToast.classList.add('visible');
+      setTimeout(() => errorToast.classList.remove('visible'), 5000);
+    }
+
+    function getInitials(name) {
+      return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    }
+
+    // --- Contact search ---
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = searchInput.value.trim();
+      if (q.length < 2) {
+        dropdown.classList.remove('open');
+        return;
+      }
+      debounceTimer = setTimeout(() => searchContacts(q), 300);
+    });
+
+    searchInput.addEventListener('focus', () => {
+      if (dropdown.children.length > 0 && searchInput.value.trim().length >= 2) {
+        dropdown.classList.add('open');
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-wrapper')) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    async function searchContacts(q) {
+      dropdown.innerHTML = '<div class="dropdown-searching"><div class="spinner" style="width:24px;height:24px;border-width:2px;margin:0 auto"></div></div>';
+      dropdown.classList.add('open');
+
+      try {
+        const res = await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}&locationId=${locationId}`);
+        if (!res.ok) throw new Error('Search failed');
+
+        const { contacts } = await res.json();
+
+        if (contacts.length === 0) {
+          dropdown.innerHTML = '<div class="dropdown-empty">No contacts found</div>';
+          return;
+        }
+
+        dropdown.innerHTML = contacts.map(c => `
+          <div class="dropdown-item" data-id="${c.id}" data-name="${esc(c.name)}" data-email="${esc(c.email || '')}" data-phone="${esc(c.phone || '')}">
+            <div class="name">${esc(c.name)}</div>
+            <div class="detail">${esc([c.email, c.phone].filter(Boolean).join(' · ') || 'No details')}</div>
+          </div>
+        `).join('');
+
+        dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+          item.addEventListener('click', () => selectContact({
+            id: item.dataset.id,
+            name: item.dataset.name,
+            email: item.dataset.email || null,
+            phone: item.dataset.phone || null,
+          }));
+        });
+      } catch (err) {
+        dropdown.innerHTML = '<div class="dropdown-empty">Search failed. Try again.</div>';
+      }
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      const el = document.createElement('span');
+      el.textContent = str;
+      return el.innerHTML;
+    }
+
+    // --- Contact selection ---
+    function selectContact(contact) {
+      selectedContact = contact;
+      dropdown.classList.remove('open');
+      searchInput.value = '';
+
+      contactAvatar.textContent = getInitials(contact.name);
+      contactName.textContent = contact.name;
+      contactDetail.textContent = [contact.email, contact.phone].filter(Boolean).join(' · ') || 'No details';
+
+      selectedContactEl.classList.add('visible');
+      exportBtn.classList.add('visible');
+
+      // Hide previous results
+      progressSection.classList.remove('visible');
+      downloadSection.classList.remove('visible');
+      errorToast.classList.remove('visible');
+    }
+
+    btnRemove.addEventListener('click', () => {
+      selectedContact = null;
+      selectedContactEl.classList.remove('visible');
+      exportBtn.classList.remove('visible');
+      progressSection.classList.remove('visible');
+      downloadSection.classList.remove('visible');
+      searchInput.focus();
+    });
+
+    // --- Export ---
+    exportBtn.addEventListener('click', startExport);
+
+    async function startExport() {
+      if (!selectedContact || !locationId) return;
+
+      exportBtn.disabled = true;
+      exportBtn.textContent = 'Starting...';
+      progressSection.classList.add('visible');
+      downloadSection.classList.remove('visible');
+      errorToast.classList.remove('visible');
+      progressLabel.textContent = 'Starting export...';
+      progressBar.className = 'progress-bar indeterminate';
+      progressBar.style.width = '';
+
+      try {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactId: selectedContact.id,
+            locationId,
+            contactName: selectedContact.name,
+            contactEmail: selectedContact.email,
+            contactPhone: selectedContact.phone,
+          }),
+        });
+
+        if (!res.ok) throw new Error('Failed to start export');
+
+        const { jobId } = await res.json();
+        currentJobId = jobId;
+        pollProgress();
+      } catch (err) {
+        showError('Failed to start export. Please try again.');
+        resetExportBtn();
+      }
+    }
+
+    function pollProgress() {
+      if (!currentJobId) return;
+
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/export/${currentJobId}`);
+          if (!res.ok) throw new Error('Poll failed');
+
+          const job = await res.json();
+
+          if (job.status === 'complete') {
+            clearInterval(pollTimer);
+            onExportComplete(job);
+          } else if (job.status === 'failed') {
+            clearInterval(pollTimer);
+            showError(job.error || 'Export failed. Please try again.');
+            resetExportBtn();
+            progressSection.classList.remove('visible');
+          } else {
+            updateProgress(job.progress);
+          }
+        } catch (err) {
+          // Silently retry on network errors
+        }
+      }, 1000);
+    }
+
+    function updateProgress(progress) {
+      if (!progress) return;
+
+      progressBar.className = 'progress-bar';
+
+      switch (progress.phase) {
+        case 'conversations':
+          progressLabel.textContent = `Finding conversations... (${progress.count || 0} found)`;
+          progressBar.className = 'progress-bar indeterminate';
+          progressBar.style.width = '';
+          break;
+
+        case 'fetching_messages':
+          const pct = progress.totalConversations > 0
+            ? Math.round((progress.completedConversations / progress.totalConversations) * 80)
+            : 0;
+          progressLabel.textContent = `Fetching messages... ${progress.completedConversations || 0}/${progress.totalConversations || '?'} conversations (${progress.totalMessages || 0} messages)`;
+          progressBar.style.width = pct + '%';
+          break;
+
+        case 'transcriptions':
+          const tpct = progress.total > 0
+            ? Math.round(80 + (progress.completed / progress.total) * 10)
+            : 85;
+          progressLabel.textContent = `Fetching call transcriptions... ${progress.completed || 0}/${progress.total || 0}`;
+          progressBar.style.width = tpct + '%';
+          break;
+
+        case 'generating_pdf':
+          progressLabel.textContent = `Generating PDF... (${progress.totalMessages || 0} messages)`;
+          progressBar.style.width = '95%';
+          break;
+
+        default:
+          progressLabel.textContent = 'Processing...';
+          progressBar.className = 'progress-bar indeterminate';
+          progressBar.style.width = '';
+      }
+    }
+
+    function onExportComplete(job) {
+      progressSection.classList.remove('visible');
+      downloadSection.classList.add('visible');
+      downloadInfo.textContent = `${job.progress?.totalMessages || 0} messages exported to PDF.`;
+
+      resetExportBtn();
+
+      // Auto-download
+      triggerDownload();
+    }
+
+    function triggerDownload() {
+      if (!currentJobId) return;
+      const a = document.createElement('a');
+      a.href = `/api/export/${currentJobId}/download`;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    downloadBtn.addEventListener('click', triggerDownload);
+
+    newExportBtn.addEventListener('click', () => {
+      selectedContact = null;
+      currentJobId = null;
+      selectedContactEl.classList.remove('visible');
+      exportBtn.classList.remove('visible');
+      downloadSection.classList.remove('visible');
+      progressSection.classList.remove('visible');
+      searchInput.value = '';
+      searchInput.focus();
+    });
+
+    function resetExportBtn() {
+      exportBtn.disabled = false;
+      exportBtn.textContent = 'Export as PDF';
+    }
+
+    // --- Init ---
+    initSSO();
+  </script>
+</body>
+</html>
