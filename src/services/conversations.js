@@ -181,12 +181,42 @@ async function fetchContactHistory(locationId, contactId, onProgress) {
     await delay(DELAY_MS);
   }
 
-  // 4. Sort chronologically (oldest first)
-  allMessages.sort(
+  // 4. Filter out internal GHL activity/system messages
+  const SYSTEM_PATTERNS = [
+    /^opportunity\s+(created|updated|deleted|moved|won|lost|abandoned|status changed)/i,
+    /^contact\s+(created|updated|deleted|tagged|untagged)/i,
+    /^task\s+(created|completed|deleted)/i,
+    /^note\s+(created|updated|deleted)/i,
+    /^appointment\s+(created|updated|cancelled|deleted|scheduled|rescheduled)/i,
+    /^invoice\s+(created|sent|paid|voided)/i,
+    /^payment\s+(received|failed|refunded)/i,
+    /^workflow\s+/i,
+    /^pipeline\s+/i,
+  ];
+
+  const filtered = allMessages.filter((m) => {
+    // Must have a real direction
+    if (m.direction !== "inbound" && m.direction !== "outbound") return false;
+    // Skip activity/system message types
+    if (m.messageType === "ACTIVITY" || m.contentType === "ACTIVITY") return false;
+
+    // Skip messages with no real content
+    const body = m.body || m.text || m.message || m.html || "";
+    if (!body && m.messageType !== "CALL") return false;
+
+    // Skip known system message patterns
+    const text = (typeof body === "string" ? body : "").trim();
+    if (SYSTEM_PATTERNS.some((p) => p.test(text))) return false;
+
+    return true;
+  });
+
+  // 5. Sort chronologically (oldest first)
+  filtered.sort(
     (a, b) => new Date(a.dateAdded) - new Date(b.dateAdded)
   );
 
-  return allMessages;
+  return filtered;
 }
 
 module.exports = {
