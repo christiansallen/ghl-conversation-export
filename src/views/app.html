@@ -580,9 +580,13 @@
 
       try {
         const res = await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}&locationId=${locationId}`);
-        if (!res.ok) throw new Error('Search failed');
+        const json = await res.json();
+        if (!res.ok) {
+          console.error('Search error:', json);
+          throw new Error(json.detail ? JSON.stringify(json.detail) : 'Search failed');
+        }
 
-        const { contacts } = await res.json();
+        const { contacts } = json;
 
         if (contacts.length === 0) {
           dropdown.innerHTML = '<div class="dropdown-empty">No contacts found</div>';
@@ -605,7 +609,7 @@
           }));
         });
       } catch (err) {
-        dropdown.innerHTML = '<div class="dropdown-empty">Search failed. Try again.</div>';
+        dropdown.innerHTML = `<div class="dropdown-empty">${esc(err.message)}</div>`;
       }
     }
 

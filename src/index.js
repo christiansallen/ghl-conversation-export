@@ -170,8 +170,9 @@ app.get("/api/contacts/search", async (req, res) => {
 
     res.json({ contacts });
   } catch (err) {
-    console.error("Contact search error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to search contacts" });
+    const detail = err.response?.data || err.message;
+    console.error("Contact search error:", detail);
+    res.status(500).json({ error: "Failed to search contacts", detail });
   }
 });
 
