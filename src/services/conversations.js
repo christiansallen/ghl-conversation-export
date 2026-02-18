@@ -28,7 +28,10 @@ async function fetchAllConversations(locationId, contactId, onProgress) {
       `${API}/conversations/search?${params}`
     );
 
-    const batch = data.conversations || [];
+    const batch = Array.isArray(data.conversations) ? data.conversations : [];
+    if (!Array.isArray(data.conversations)) {
+      console.log("Conversations response shape:", Object.keys(data || {}));
+    }
     conversations.push(...batch);
 
     if (onProgress) {
@@ -36,8 +39,12 @@ async function fetchAllConversations(locationId, contactId, onProgress) {
     }
 
     // GHL returns empty array or fewer results when no more pages
-    if (batch.length === 0 || !data.nextPage) break;
-    lastMessageId = batch[batch.length - 1].lastMessageId || batch[batch.length - 1].id;
+    if (batch.length === 0) break;
+
+    // Pagination: try different fields GHL might use
+    const nextId = data.lastMessageId || batch[batch.length - 1]?.lastMessageId || batch[batch.length - 1]?.id;
+    if (!nextId || nextId === lastMessageId) break;
+    lastMessageId = nextId;
 
     await delay(DELAY_MS);
   }
@@ -59,7 +66,14 @@ async function fetchAllMessages(locationId, conversationId, onProgress) {
     const url = `${API}/conversations/${conversationId}/messages${params.toString() ? "?" + params : ""}`;
     const { data } = await ghl.apiCall(locationId, "GET", url);
 
-    const batch = data.messages || [];
+    const batch = Array.isArray(data.messages)
+      ? data.messages
+      : data.messages?.messages
+        ? data.messages.messages
+        : [];
+    if (!Array.isArray(data.messages)) {
+      console.log("Messages response shape:", JSON.stringify(data).slice(0, 500));
+    }
     messages.push(...batch);
 
     if (onProgress) {
@@ -70,8 +84,11 @@ async function fetchAllMessages(locationId, conversationId, onProgress) {
       });
     }
 
-    if (batch.length === 0 || !data.nextPage) break;
-    lastMessageId = data.lastMessageId || batch[batch.length - 1].id;
+    if (batch.length === 0) break;
+
+    const nextId = data.lastMessageId || batch[batch.length - 1]?.id;
+    if (!nextId || nextId === lastMessageId) break;
+    lastMessageId = nextId;
 
     await delay(DELAY_MS);
   }
