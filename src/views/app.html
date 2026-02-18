@@ -197,6 +197,38 @@
     .btn-remove:hover { color: #ef4444; }
     .btn-remove svg { width: 18px; height: 18px; }
 
+    /* Date range */
+    .date-range {
+      margin-top: 16px;
+      display: none;
+      gap: 12px;
+    }
+    .date-range.visible { display: flex; }
+    .date-field {
+      flex: 1;
+    }
+    .date-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .date-field input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+    .date-field input:focus {
+      border-color: #2563eb;
+    }
+
     /* Export button */
     .export-btn {
       margin-top: 20px;
@@ -309,6 +341,26 @@
     }
     .new-export-btn:hover { text-decoration: underline; }
 
+    /* Demo button */
+    .demo-btn {
+      margin-top: 16px;
+      width: 100%;
+      padding: 12px;
+      background: #fff;
+      color: #6b7280;
+      border: 1.5px dashed #d1d5db;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .demo-btn:hover { border-color: #2563eb; color: #2563eb; }
+    .demo-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* Error toast */
     .error-toast {
       margin-top: 16px;
@@ -368,6 +420,18 @@
         </button>
       </div>
 
+      <!-- Date range -->
+      <div id="date-range" class="date-range">
+        <div class="date-field">
+          <label for="start-date">From (optional)</label>
+          <input type="date" id="start-date">
+        </div>
+        <div class="date-field">
+          <label for="end-date">To (optional)</label>
+          <input type="date" id="end-date">
+        </div>
+      </div>
+
       <!-- Export button -->
       <button id="export-btn" class="export-btn">Export as PDF</button>
 
@@ -393,6 +457,9 @@
         <br>
         <button id="new-export-btn" class="new-export-btn">Export another contact</button>
       </div>
+
+      <!-- Demo button -->
+      <button id="demo-btn" class="demo-btn">Try with sample data (no contacts needed)</button>
 
       <!-- Error toast -->
       <div id="error-toast" class="error-toast"></div>
@@ -428,9 +495,22 @@
     const downloadBtn = document.getElementById('download-btn');
     const newExportBtn = document.getElementById('new-export-btn');
     const errorToast = document.getElementById('error-toast');
+    const demoBtn = document.getElementById('demo-btn');
+    const dateRangeEl = document.getElementById('date-range');
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+    const isDemo = new URLSearchParams(window.location.search).has('demo');
 
     // --- SSO Init ---
     function initSSO() {
+      // Skip SSO in demo mode
+      if (isDemo) {
+        locationId = 'demo';
+        showState('app');
+        searchInput.focus();
+        return;
+      }
+
       window.addEventListener('message', handleSSOMessage);
       // Request user data from GHL parent frame
       window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*');
@@ -439,17 +519,26 @@
       setTimeout(() => {
         if (!locationId) {
           showState('error');
-          errorMessage.textContent = 'SSO handshake timed out. Make sure you are accessing this app from within GoHighLevel.';
+          errorMessage.textContent = 'SSO handshake timed out. Make sure you are accessing this app from within GoHighLevel and that the SSO key is configured in your marketplace app settings.';
+          console.error('SSO timeout. Is GHL_APP_SSO_KEY configured? Is SSO enabled in the marketplace portal?');
         }
       }, 10000);
     }
 
     function handleSSOMessage(event) {
-      if (!event.data || !event.data.message) return;
+      console.log('SSO message received:', event.data);
+      if (!event.data) return;
 
-      if (event.data.message === 'USER_DATA') {
-        const ssoKey = event.data.payload;
-        decryptSSO(ssoKey);
+      // GHL may send the data in different formats
+      const msg = event.data;
+
+      if (msg.message === 'USER_DATA' || msg.type === 'USER_DATA') {
+        const ssoKey = msg.payload || msg.data;
+        if (ssoKey) {
+          decryptSSO(ssoKey);
+        } else {
+          console.error('SSO: got USER_DATA but no payload', msg);
+        }
       }
     }
 
@@ -571,20 +660,43 @@
       contactDetail.textContent = [contact.email, contact.phone].filter(Boolean).join(' · ') || 'No details';
 
       selectedContactEl.classList.add('visible');
+      dateRangeEl.classList.add('visible');
       exportBtn.classList.add('visible');
 
       // Hide previous results
       progressSection.classList.remove('visible');
       downloadSection.classList.remove('visible');
       errorToast.classList.remove('visible');
+
+      // Fetch date range for this contact (skip for demo)
+      if (contact.id !== 'demo' && locationId && locationId !== 'demo') {
+        fetchDateRange(contact.id);
+      }
+    }
+
+    async function fetchDateRange(contactId) {
+      startDateInput.value = '';
+      endDateInput.value = '';
+      try {
+        const res = await fetch(`/api/contacts/${contactId}/date-range?locationId=${locationId}`);
+        if (!res.ok) return;
+        const { startDate, endDate } = await res.json();
+        if (startDate) startDateInput.value = startDate;
+        if (endDate) endDateInput.value = endDate;
+      } catch (err) {
+        // Silently fail — dates are optional
+      }
     }
 
     btnRemove.addEventListener('click', () => {
       selectedContact = null;
       selectedContactEl.classList.remove('visible');
+      dateRangeEl.classList.remove('visible');
       exportBtn.classList.remove('visible');
       progressSection.classList.remove('visible');
       downloadSection.classList.remove('visible');
+      startDateInput.value = '';
+      endDateInput.value = '';
       searchInput.focus();
     });
 
@@ -592,6 +704,10 @@
     exportBtn.addEventListener('click', startExport);
 
     async function startExport() {
+      if (selectedContact && selectedContact.id === 'demo') {
+        runDemoExport();
+        return;
+      }
       if (!selectedContact || !locationId) return;
 
       exportBtn.disabled = true;
@@ -613,6 +729,8 @@
             contactName: selectedContact.name,
             contactEmail: selectedContact.email,
             contactPhone: selectedContact.phone,
+            startDate: startDateInput.value || null,
+            endDate: endDateInput.value || null,
           }),
         });
 
@@ -721,9 +839,12 @@
       selectedContact = null;
       currentJobId = null;
       selectedContactEl.classList.remove('visible');
+      dateRangeEl.classList.remove('visible');
       exportBtn.classList.remove('visible');
       downloadSection.classList.remove('visible');
       progressSection.classList.remove('visible');
+      startDateInput.value = '';
+      endDateInput.value = '';
       searchInput.value = '';
       searchInput.focus();
     });
@@ -732,6 +853,76 @@
       exportBtn.disabled = false;
       exportBtn.textContent = 'Export as PDF';
     }
+
+    // --- Demo export ---
+    demoBtn.addEventListener('click', startDemoExport);
+
+    let demoReady = false;
+
+    async function startDemoExport() {
+      // First click: show demo contact + date pickers
+      if (!demoReady) {
+        demoReady = true;
+        selectContact({
+          id: 'demo',
+          name: 'Sarah Mitchell',
+          email: 'sarah.mitchell@example.com',
+          phone: '+1 (555) 847-2930',
+        });
+        // Pre-fill date range with demo data range
+        startDateInput.value = '2024-01-01';
+        endDateInput.value = '2024-12-31';
+        exportBtn.textContent = 'Export Demo as PDF';
+        demoBtn.textContent = 'Skip preview — export now';
+        return;
+      }
+
+      // Second click (or export btn): run the demo export
+      runDemoExport();
+    }
+
+    async function runDemoExport() {
+      demoBtn.disabled = true;
+      demoBtn.textContent = 'Exporting...';
+      exportBtn.disabled = true;
+      exportBtn.textContent = 'Exporting...';
+      progressSection.classList.add('visible');
+      downloadSection.classList.remove('visible');
+      errorToast.classList.remove('visible');
+      progressLabel.textContent = 'Starting export...';
+      progressBar.className = 'progress-bar indeterminate';
+      progressBar.style.width = '';
+
+      try {
+        const res = await fetch('/api/demo-export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!res.ok) throw new Error('Failed to start demo export');
+
+        const { jobId } = await res.json();
+        currentJobId = jobId;
+        pollProgress();
+      } catch (err) {
+        showError('Failed to start demo export. Please try again.');
+        resetDemoBtn();
+        progressSection.classList.remove('visible');
+      }
+    }
+
+    function resetDemoBtn() {
+      demoReady = false;
+      demoBtn.disabled = false;
+      demoBtn.textContent = 'Try with sample data (no contacts needed)';
+    }
+
+    // Patch onExportComplete to also reset demo btn
+    const _origOnExportComplete = onExportComplete;
+    onExportComplete = function(job) {
+      _origOnExportComplete(job);
+      resetDemoBtn();
+    };
 
     // --- Init ---
     initSSO();
