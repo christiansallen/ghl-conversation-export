@@ -59,6 +59,7 @@ async function apiCall(locationId, method, url, data = null) {
   const headers = {
     Authorization: `Bearer ${tokens.access_token}`,
     "Content-Type": "application/json",
+    Version: "2021-07-28",
   };
 
   try {

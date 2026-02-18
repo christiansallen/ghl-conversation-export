@@ -341,26 +341,6 @@
     }
     .new-export-btn:hover { text-decoration: underline; }
 
-    /* Demo button */
-    .demo-btn {
-      margin-top: 16px;
-      width: 100%;
-      padding: 12px;
-      background: #fff;
-      color: #6b7280;
-      border: 1.5px dashed #d1d5db;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
-    }
-    .demo-btn:hover { border-color: #2563eb; color: #2563eb; }
-    .demo-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
     /* Error toast */
     .error-toast {
       margin-top: 16px;
@@ -458,9 +438,6 @@
         <button id="new-export-btn" class="new-export-btn">Export another contact</button>
       </div>
 
-      <!-- Demo button -->
-      <button id="demo-btn" class="demo-btn">Try with sample data (no contacts needed)</button>
-
       <!-- Error toast -->
       <div id="error-toast" class="error-toast"></div>
     </div>
@@ -495,22 +472,12 @@
     const downloadBtn = document.getElementById('download-btn');
     const newExportBtn = document.getElementById('new-export-btn');
     const errorToast = document.getElementById('error-toast');
-    const demoBtn = document.getElementById('demo-btn');
     const dateRangeEl = document.getElementById('date-range');
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
-    const isDemo = new URLSearchParams(window.location.search).has('demo');
 
     // --- SSO Init ---
     function initSSO() {
-      // Skip SSO in demo mode
-      if (isDemo) {
-        locationId = 'demo';
-        showState('app');
-        searchInput.focus();
-        return;
-      }
-
       window.addEventListener('message', handleSSOMessage);
       // Request user data from GHL parent frame
       window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*');
@@ -704,10 +671,6 @@
     exportBtn.addEventListener('click', startExport);
 
     async function startExport() {
-      if (selectedContact && selectedContact.id === 'demo') {
-        runDemoExport();
-        return;
-      }
       if (!selectedContact || !locationId) return;
 
       exportBtn.disabled = true;
@@ -853,76 +816,6 @@
       exportBtn.disabled = false;
       exportBtn.textContent = 'Export as PDF';
     }
-
-    // --- Demo export ---
-    demoBtn.addEventListener('click', startDemoExport);
-
-    let demoReady = false;
-
-    async function startDemoExport() {
-      // First click: show demo contact + date pickers
-      if (!demoReady) {
-        demoReady = true;
-        selectContact({
-          id: 'demo',
-          name: 'Sarah Mitchell',
-          email: 'sarah.mitchell@example.com',
-          phone: '+1 (555) 847-2930',
-        });
-        // Pre-fill date range with demo data range
-        startDateInput.value = '2024-01-01';
-        endDateInput.value = '2024-12-31';
-        exportBtn.textContent = 'Export Demo as PDF';
-        demoBtn.textContent = 'Skip preview — export now';
-        return;
-      }
-
-      // Second click (or export btn): run the demo export
-      runDemoExport();
-    }
-
-    async function runDemoExport() {
-      demoBtn.disabled = true;
-      demoBtn.textContent = 'Exporting...';
-      exportBtn.disabled = true;
-      exportBtn.textContent = 'Exporting...';
-      progressSection.classList.add('visible');
-      downloadSection.classList.remove('visible');
-      errorToast.classList.remove('visible');
-      progressLabel.textContent = 'Starting export...';
-      progressBar.className = 'progress-bar indeterminate';
-      progressBar.style.width = '';
-
-      try {
-        const res = await fetch('/api/demo-export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!res.ok) throw new Error('Failed to start demo export');
-
-        const { jobId } = await res.json();
-        currentJobId = jobId;
-        pollProgress();
-      } catch (err) {
-        showError('Failed to start demo export. Please try again.');
-        resetDemoBtn();
-        progressSection.classList.remove('visible');
-      }
-    }
-
-    function resetDemoBtn() {
-      demoReady = false;
-      demoBtn.disabled = false;
-      demoBtn.textContent = 'Try with sample data (no contacts needed)';
-    }
-
-    // Patch onExportComplete to also reset demo btn
-    const _origOnExportComplete = onExportComplete;
-    onExportComplete = function(job) {
-      _origOnExportComplete(job);
-      resetDemoBtn();
-    };
 
     // --- Init ---
     initSSO();
