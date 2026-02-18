@@ -532,12 +532,12 @@
       // GHL may send the data in different formats
       const msg = event.data;
 
-      if (msg.message === 'USER_DATA' || msg.type === 'USER_DATA') {
+      if (msg.message === 'USER_DATA' || msg.message === 'REQUEST_USER_DATA_RESPONSE') {
         const ssoKey = msg.payload || msg.data;
         if (ssoKey) {
           decryptSSO(ssoKey);
         } else {
-          console.error('SSO: got USER_DATA but no payload', msg);
+          console.error('SSO: got response but no payload', msg);
         }
       }
     }
