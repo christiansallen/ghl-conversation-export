@@ -152,7 +152,7 @@ app.get("/app", (_req, res) => {
 app.get("/api/contacts/search", async (req, res) => {
   const { q, locationId } = req.query;
   if (!locationId) return res.status(400).json({ error: "Missing locationId" });
-  if (!q || q.trim().length < 2) return res.status(400).json({ error: "Query too short" });
+  if (!q || q.trim().length < 3) return res.status(400).json({ error: "Query too short" });
 
   try {
     const { data } = await ghl.apiCall(
