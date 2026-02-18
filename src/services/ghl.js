@@ -20,13 +20,13 @@ async function exchangeCodeForTokens(code) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
 
-  store.saveTokens(data.locationId, data);
+  await store.saveTokens(data.locationId, data);
   console.log(`Tokens stored for location ${data.locationId}`);
   return data;
 }
 
 async function refreshAccessToken(locationId) {
-  const existing = store.getTokens(locationId);
+  const existing = await store.getTokens(locationId);
   if (!existing) throw new Error(`No tokens found for location ${locationId}`);
 
   const params = new URLSearchParams({
@@ -43,7 +43,7 @@ async function refreshAccessToken(locationId) {
   });
 
   // Refresh tokens are single-use — always merge and persist the new one
-  store.saveTokens(locationId, { ...existing, ...data });
+  await store.saveTokens(locationId, { ...existing, ...data });
   console.log(`Tokens refreshed for location ${locationId}`);
   return data.access_token;
 }
@@ -53,7 +53,7 @@ async function refreshAccessToken(locationId) {
  * Use this for any API call to GHL services.
  */
 async function apiCall(locationId, method, url, data = null) {
-  const tokens = store.getTokens(locationId);
+  const tokens = await store.getTokens(locationId);
   if (!tokens) throw new Error(`No tokens for location ${locationId}`);
 
   const headers = {
