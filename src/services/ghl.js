@@ -62,14 +62,17 @@ async function apiCall(locationId, method, url, data = null) {
     Version: "2021-07-28",
   };
 
+  const opts = { method, url, headers };
+  if (data) opts.data = data;
+
   try {
-    return await axios({ method, url, data, headers });
+    return await axios(opts);
   } catch (err) {
     if (err.response?.status === 401) {
       console.log(`Token expired for ${locationId}, refreshing...`);
       const newToken = await refreshAccessToken(locationId);
-      headers.Authorization = `Bearer ${newToken}`;
-      return await axios({ method, url, data, headers });
+      opts.headers.Authorization = `Bearer ${newToken}`;
+      return await axios(opts);
     }
     throw err;
   }
